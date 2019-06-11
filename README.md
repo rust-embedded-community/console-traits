@@ -23,7 +23,7 @@ This crate contains three basic traits, to help you add a console to your
 
 ## Changelog
 
-### Unreleased Changes ([Source](https://github.com/rust-embedded-community/tree/master) | [Changes](https://github.com/rust-embedded-community/compare/v0.4.0...master))
+### Unreleased Changes ([Source](https://github.com/rust-embedded-community/console-traits/tree/master) | [Changes](https://github.com/rust-embedded-community/compare/console-traits/v0.4.0...master))
 
 * We're working on full ANSI escape sequence support in the `ansi_support`
   branch.
