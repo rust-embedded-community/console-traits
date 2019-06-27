@@ -323,6 +323,7 @@ pub trait BaseConsole {
             }
             EscapeCharMode::SeenEscWantOpeningChar => match character {
                 b'c' => {
+                    // They'll need to do the rest (like clear the screen)
                     self.handle_escape(EscapeCode::Reset);
                     EscapeCharMode::Waiting
                 }
@@ -333,7 +334,7 @@ pub trait BaseConsole {
                 match character {
                     b'0'...b'9' => {
                         let digit = character - b'0';
-                        EscapeCharMode::SeenCsiAndArgWantType(digit as u32)
+                        EscapeCharMode::SeenCsiAndArgWantType(u32::from(digit))
                     }
                     b';' => {
                         // Missing argument - default to 0
@@ -408,7 +409,7 @@ pub trait BaseConsole {
                 match character {
                     b'0'...b'9' => {
                         let digit = character - b'0';
-                        EscapeCharMode::SeenCsiAndArgWantType((old_arg * 10) + digit as u32)
+                        EscapeCharMode::SeenCsiAndArgWantType((old_arg * 10) + u32::from(digit))
                     }
                     b';' => EscapeCharMode::SeenCsiAndTwoArgsWantType(old_arg, 0),
                     b'A' => {
@@ -481,7 +482,10 @@ pub trait BaseConsole {
                 match character {
                     b'0'...b'9' => {
                         let digit = character - b'0';
-                        EscapeCharMode::SeenCsiAndTwoArgsWantType(arg0, (arg1 * 10) + digit as u32)
+                        EscapeCharMode::SeenCsiAndTwoArgsWantType(
+                            arg0,
+                            (arg1 * 10) + u32::from(digit),
+                        )
                     }
                     b'H' => {
                         self.handle_escape(EscapeCode::CursorPosition(arg0, arg1));
@@ -489,6 +493,11 @@ pub trait BaseConsole {
                     }
                     b'f' => {
                         self.handle_escape(EscapeCode::CursorPosition(arg0, arg1));
+                        EscapeCharMode::Waiting
+                    }
+                    b'm' => {
+                        self.handle_escape(EscapeCode::SelectGraphicRendition(arg0.into()));
+                        self.handle_escape(EscapeCode::SelectGraphicRendition(arg1.into()));
                         EscapeCharMode::Waiting
                     }
                     0x40...0x7E => {
@@ -913,7 +922,18 @@ mod test {
         }
 
         fn handle_escape(&mut self, code: EscapeCode) {
-            self.ansi_codes.push(code);
+            match code {
+                EscapeCode::Reset => {
+                    self.pos = Position::new(Row(0), Col(0));
+                }
+                EscapeCode::CursorPosition(r, c) => {
+                    self.set_pos(Position::new(Row(r as u8), Col(c as u8)))
+                        .unwrap();
+                }
+                _ => {
+                    self.ansi_codes.push(code);
+                }
+            }
         }
     }
 
@@ -1006,6 +1026,142 @@ mod test {
         );
         assert_eq!(c.pos.row, Row(HEIGHT - 1));
         assert_eq!(c.pos.col, Col(0));
+    }
+
+    #[test]
+    fn test_ansi_home() {
+        let mut c = TestConsole::new();
+        c.write_str("1\u{001B}[;H2").unwrap();
+        assert_eq!(
+            &c.lines[0].chars[0..4],
+            &"2   ".chars().collect::<Vec<char>>()[..]
+        );
+        assert_eq!(c.pos.row, Row(0));
+        assert_eq!(c.pos.col, Col(1));
+    }
+
+    #[test]
+    fn test_ansi_colours() {
+        static TEST_PAIRS: [(&'static str, &[EscapeCode]); 17] = [
+            (
+                "30",
+                &[EscapeCode::SelectGraphicRendition(
+                    CharacterAppearance::ForegroundColour(Colour::Black),
+                )],
+            ),
+            (
+                "31",
+                &[EscapeCode::SelectGraphicRendition(
+                    CharacterAppearance::ForegroundColour(Colour::Red),
+                )],
+            ),
+            (
+                "32",
+                &[EscapeCode::SelectGraphicRendition(
+                    CharacterAppearance::ForegroundColour(Colour::Green),
+                )],
+            ),
+            (
+                "33",
+                &[EscapeCode::SelectGraphicRendition(
+                    CharacterAppearance::ForegroundColour(Colour::Yellow),
+                )],
+            ),
+            (
+                "34",
+                &[EscapeCode::SelectGraphicRendition(
+                    CharacterAppearance::ForegroundColour(Colour::Blue),
+                )],
+            ),
+            (
+                "35",
+                &[EscapeCode::SelectGraphicRendition(
+                    CharacterAppearance::ForegroundColour(Colour::Magenta),
+                )],
+            ),
+            (
+                "36",
+                &[EscapeCode::SelectGraphicRendition(
+                    CharacterAppearance::ForegroundColour(Colour::Cyan),
+                )],
+            ),
+            (
+                "37",
+                &[EscapeCode::SelectGraphicRendition(
+                    CharacterAppearance::ForegroundColour(Colour::White),
+                )],
+            ),
+            (
+                "40",
+                &[EscapeCode::SelectGraphicRendition(
+                    CharacterAppearance::BackgroundColour(Colour::Black),
+                )],
+            ),
+            (
+                "41",
+                &[EscapeCode::SelectGraphicRendition(
+                    CharacterAppearance::BackgroundColour(Colour::Red),
+                )],
+            ),
+            (
+                "42",
+                &[EscapeCode::SelectGraphicRendition(
+                    CharacterAppearance::BackgroundColour(Colour::Green),
+                )],
+            ),
+            (
+                "43",
+                &[EscapeCode::SelectGraphicRendition(
+                    CharacterAppearance::BackgroundColour(Colour::Yellow),
+                )],
+            ),
+            (
+                "44",
+                &[EscapeCode::SelectGraphicRendition(
+                    CharacterAppearance::BackgroundColour(Colour::Blue),
+                )],
+            ),
+            (
+                "45",
+                &[EscapeCode::SelectGraphicRendition(
+                    CharacterAppearance::BackgroundColour(Colour::Magenta),
+                )],
+            ),
+            (
+                "46",
+                &[EscapeCode::SelectGraphicRendition(
+                    CharacterAppearance::BackgroundColour(Colour::Cyan),
+                )],
+            ),
+            (
+                "47",
+                &[EscapeCode::SelectGraphicRendition(
+                    CharacterAppearance::BackgroundColour(Colour::White),
+                )],
+            ),
+            (
+                "31;40",
+                &[
+                    EscapeCode::SelectGraphicRendition(CharacterAppearance::ForegroundColour(
+                        Colour::Red,
+                    )),
+                    EscapeCode::SelectGraphicRendition(CharacterAppearance::BackgroundColour(
+                        Colour::Black,
+                    )),
+                ],
+            ),
+        ];
+        for (index, code_list) in &TEST_PAIRS {
+            let mut c = TestConsole::new();
+            write!(c, "1\u{001B}[{}m2", index).unwrap();
+            assert_eq!(
+                &c.lines[0].chars[0..4],
+                &"12  ".chars().collect::<Vec<char>>()[..]
+            );
+            assert_eq!(c.pos.row, Row(0));
+            assert_eq!(c.pos.col, Col(2));
+            assert_eq!(&c.ansi_codes, code_list);
+        }
     }
 
     #[test]
